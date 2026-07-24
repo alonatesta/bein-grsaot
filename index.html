@@ -882,10 +882,13 @@ function doPostcardCapture(){
   g.textAlign = 'left';
   g.textBaseline = 'alphabetic';
   g.fillStyle = 'rgb(91,91,91)';
+  // time (small) sits directly above the date (large), sharing the SAME left
+  // edge so the two lines are aligned straight.
+  const stampX = Math.round(0.072 * OUT_W);
   g.font = '100 ' + timeSize + 'px GeistMono, monospace';
-  g.fillText(timeStamp(), Math.round(0.057 * OUT_W), Math.round(0.9172 * OUT_H));
+  g.fillText(timeStamp(), stampX, Math.round(0.9172 * OUT_H));
   g.font = '100 ' + dateSize + 'px GeistMono, monospace';
-  g.fillText(fullDateStamp(), Math.round(0.072 * OUT_W), Math.round(0.9562 * OUT_H));
+  g.fillText(fullDateStamp(), stampX, Math.round(0.9562 * OUT_H));
 
   $('postcardOverlay').classList.add('show');
 }
