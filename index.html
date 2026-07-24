@@ -827,68 +827,81 @@ function doPostcardCapture(){
   // draw the captured region to fill the image box exactly (frame==image, so 1:1)
   g.drawImage(canvas, sx, sy, sw, sh, imgX, imgY, imgW, imgH);
 
-  // ---- logo band — reproduced one-to-one from the final PDF ----
-  // Reference (fractions of page): pink Hebrew line spans x 0.608..0.837, y 0.812..0.847.
-  // We anchor the wordmark by matching its internal pink line to that exact box, so
-  // the whole lockup lands identically regardless of the wordmark's internal padding.
+  // ==== bottom-band fine-tune knobs (fractions of page height; + = downward) ====
+  // Positive LOGO_NUDGE pushes the whole right-side lockup further DOWN,
+  // positive STAMP_NUDGE pushes the left-side time/date further DOWN.
+  const LOGO_NUDGE  = 0.0;
+  const STAMP_NUDGE = 0.0;
+
+  // ---- logo band ----
+  // Anchor the wordmark horizontally via its internal pink Hebrew line, then
+  // VERTICALLY CENTER the whole lockup inside the bottom white band.
   const REF_PINK = { x0:0.608, x1:0.837, y0:0.812, y1:0.847 };
 
-  // locate the pink line inside the wordmark image (once)
+  // locate the pink line AND the full opaque bounds of the lockup (once)
   if (!wordmarkImg._pink && wordmarkImg.complete && wordmarkImg.naturalWidth){
     const tc = document.createElement('canvas');
     tc.width = wordmarkImg.naturalWidth; tc.height = wordmarkImg.naturalHeight;
     const tg = tc.getContext('2d'); tg.drawImage(wordmarkImg,0,0);
     const d = tg.getImageData(0,0,tc.width,tc.height).data;
-    let minX=1e9,maxX=-1,minY=1e9,maxY=-1;
+    let minX=1e9,maxX=-1,minY=1e9,maxY=-1;   // pink Hebrew line bounds
+    let topY=1e9, botY=-1;                    // whole-lockup opaque bounds
     for (let y=0;y<tc.height;y++) for (let x=0;x<tc.width;x++){
       const i=(y*tc.width+x)*4, r=d[i],gg=d[i+1],bb=d[i+2],aa=d[i+3];
+      if (aa>60){ if(y<topY)topY=y; if(y>botY)botY=y; }
       if (aa>100 && r>230 && gg>150 && gg<200 && bb>195 && bb<230){
         if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y;
       }
     }
-    wordmarkImg._pink = {x0:minX/tc.width, x1:maxX/tc.width, y0:minY/tc.height, y1:maxY/tc.height};
+    wordmarkImg._pink   = {x0:minX/tc.width, x1:maxX/tc.width, y0:minY/tc.height, y1:maxY/tc.height};
+    wordmarkImg._top    = topY/tc.height;    // top of Hebrew line (fraction of image)
+    wordmarkImg._bottom = botY/tc.height;    // bottom of Arabic line (fraction of image)
   }
-  const wp = wordmarkImg._pink || {x0:0.364,x1:0.777,y0:0.003,y1:0.222};
+  const wp   = wordmarkImg._pink   || {x0:0.364,x1:0.777,y0:0.003,y1:0.222};
+  const wTop = (wordmarkImg._top    != null) ? wordmarkImg._top    : 0.0;
+  const wBot = (wordmarkImg._bottom != null) ? wordmarkImg._bottom : 1.0;
 
   // scale so the wordmark's pink width matches the reference pink width
   const refPinkW = (REF_PINK.x1 - REF_PINK.x0) * OUT_W;
-  const wmPinkWfrac = (wp.x1 - wp.x0);
-  const drawW = refPinkW / wmPinkWfrac;
+  const drawW = refPinkW / (wp.x1 - wp.x0);
   const drawH = drawW * (wordmarkImg.naturalHeight / wordmarkImg.naturalWidth);
-  // position so pink line x0,y0 align with reference
   const wmX = Math.round(REF_PINK.x0 * OUT_W - wp.x0 * drawW);
-  const wmY = Math.round(REF_PINK.y0 * OUT_H - wp.y0 * drawH);
+
+  // vertically center the lockup (its opaque top..bottom) in the white band
+  // [IMG_BOTTOM .. 1.0], then apply the manual nudge.
+  const bandCenter   = ((IMG_BOTTOM + 1) / 2) * OUT_H;
+  let   wmY = bandCenter - drawH * ((wTop + wBot) / 2) + LOGO_NUDGE * OUT_H;
 
   if (wordmarkImg.complete && wordmarkImg.naturalWidth){
-    g.drawImage(wordmarkImg, wmX, wmY, Math.round(drawW), Math.round(drawH));
+    g.drawImage(wordmarkImg, wmX, Math.round(wmY), Math.round(drawW), Math.round(drawH));
   }
 
-  // running counter (Geist Mono THIN, gray) — just LEFT of the pink line
-  // sizes calibrated so rendered digit heights match the reference exactly
-  // running counter (Geist Mono THIN, gray) — at the TOP of the logo, just LEFT of
-  // the pink line, its top aligned with the pink line's top (as in the reference).
+  // running counter (Geist Mono THIN, gray) — top-left of the lockup, its top
+  // aligned to the pink line's top (which after centering is wmY + drawH*wp.y0).
   const counterSize = Math.round(OUT_W * (9/420));      // 9pt
   g.font = '100 ' + counterSize + 'px GeistMono, monospace';
   g.fillStyle = 'rgb(91,91,91)';
   g.textAlign = 'right';
   g.textBaseline = 'top';
   const counterRight = Math.round(REF_PINK.x0 * OUT_W) - Math.round(0.022 * OUT_W);
-  const counterTop = Math.round(REF_PINK.y0 * OUT_H);   // align to pink line top
+  const counterTop = Math.round(wmY + drawH * wp.y0);
   g.fillText(counterStamp(pendingCounter), counterRight, counterTop);
 
-  // ---- left side: time (small, 9pt) above date (large, 13pt) ----
+  // ---- left side: time (small, 9pt) above date (large, 13pt), sharing one left
+  // edge, with the DATE baseline lined up to the Arabic line (lockup bottom). ----
   const dateSize = Math.round(OUT_W * (13/420));        // 13pt
   const timeSize = Math.round(OUT_W * (9/420));         // 9pt
+  const arabicBottomY = wmY + drawH * wBot;             // bottom of the Arabic line
+  const dateBaseline  = arabicBottomY - drawH * 0.03 + STAMP_NUDGE * OUT_H;
+  const timeBaseline  = dateBaseline - 0.039 * OUT_H;   // keep the time/date stacking gap
   g.textAlign = 'left';
   g.textBaseline = 'alphabetic';
   g.fillStyle = 'rgb(91,91,91)';
-  // time (small) sits directly above the date (large), sharing the SAME left
-  // edge so the two lines are aligned straight.
   const stampX = Math.round(0.072 * OUT_W);
   g.font = '100 ' + timeSize + 'px GeistMono, monospace';
-  g.fillText(timeStamp(), stampX, Math.round(0.9172 * OUT_H));
+  g.fillText(timeStamp(), stampX, Math.round(timeBaseline));
   g.font = '100 ' + dateSize + 'px GeistMono, monospace';
-  g.fillText(fullDateStamp(), stampX, Math.round(0.9562 * OUT_H));
+  g.fillText(fullDateStamp(), stampX, Math.round(dateBaseline));
 
   $('postcardOverlay').classList.add('show');
 }
