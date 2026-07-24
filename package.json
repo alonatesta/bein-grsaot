@@ -1,0 +1,10 @@
+{
+  "name": "bein-grsaot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "בין גרסאות — live camera-mosaic postcard installation with email delivery",
+  "dependencies": {
+    "nodemailer": "^6.9.16"
+  }
+}
