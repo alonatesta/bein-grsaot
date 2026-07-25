@@ -830,7 +830,7 @@ function doPostcardCapture(){
   // ==== bottom-band fine-tune knobs (fractions of page height; + = downward) ====
   // Positive LOGO_NUDGE pushes the whole right-side lockup further DOWN,
   // positive STAMP_NUDGE pushes the left-side time/date further DOWN.
-  const LOGO_NUDGE  = 0.0;
+  const LOGO_NUDGE  = 0.005;
   const STAMP_NUDGE = 0.0;
 
   // ---- logo band ----
@@ -887,21 +887,27 @@ function doPostcardCapture(){
   const counterTop = Math.round(wmY + drawH * wp.y0);
   g.fillText(counterStamp(pendingCounter), counterRight, counterTop);
 
-  // ---- left side: time (small, 9pt) above date (large, 13pt), sharing one left
-  // edge, with the DATE baseline lined up to the Arabic line (lockup bottom). ----
+  // ---- left side: time (small, 9pt) stacked above date (large, 13pt) as a tight
+  // group near the bottom-left, positioned to match the approved reference layout.
+  // The date baseline sits just above the Arabic line (lockup bottom); the time
+  // baseline sits a fixed gap above the date. The time is very slightly outdented
+  // to the left of the date, again matching the reference. ----
   const dateSize = Math.round(OUT_W * (13/420));        // 13pt
   const timeSize = Math.round(OUT_W * (9/420));         // 9pt
   const arabicBottomY = wmY + drawH * wBot;             // bottom of the Arabic line
-  const dateBaseline  = arabicBottomY - drawH * 0.03 + STAMP_NUDGE * OUT_H;
-  const timeBaseline  = dateBaseline - 0.039 * OUT_H;   // keep the time/date stacking gap
+  const DATE_ABOVE_ARABIC = 0.014;                      // date baseline above the Arabic descenders (frac page ht)
+  const TIME_DATE_GAP     = 0.033;                      // baseline-to-baseline gap, time above date (frac page ht)
+  const dateBaseline  = arabicBottomY - DATE_ABOVE_ARABIC * OUT_H + STAMP_NUDGE * OUT_H;
+  const timeBaseline  = dateBaseline - TIME_DATE_GAP * OUT_H;
   g.textAlign = 'left';
   g.textBaseline = 'alphabetic';
   g.fillStyle = 'rgb(91,91,91)';
-  const stampX = Math.round(0.072 * OUT_W);
+  const dateX = Math.round(0.055 * OUT_W);              // date left edge
+  const timeX = Math.round(0.036 * OUT_W);              // time left edge (slightly outdented)
   g.font = '100 ' + timeSize + 'px GeistMono, monospace';
-  g.fillText(timeStamp(), stampX, Math.round(timeBaseline));
+  g.fillText(timeStamp(), timeX, Math.round(timeBaseline));
   g.font = '100 ' + dateSize + 'px GeistMono, monospace';
-  g.fillText(fullDateStamp(), stampX, Math.round(dateBaseline));
+  g.fillText(fullDateStamp(), dateX, Math.round(dateBaseline));
 
   $('postcardOverlay').classList.add('show');
 }
