@@ -928,10 +928,26 @@ $('closePostcardBtn').addEventListener('click', ()=>{
   resetEmailUI();
 });
 
-// ---- print: go straight to an A5 colour print dialog ----
-// Browsers cannot bypass the OS print dialog (a security rule), but we preset
-// A5 + exact colours and invoke it immediately so it's a single click.
-$('printBtn').addEventListener('click', ()=>{ window.print(); });
+// ---- print: send the postcard to the printer and STAY in fullscreen ----
+// window.print() drops the page out of the Fullscreen API, so we remember we
+// were fullscreen and re-enter as soon as printing returns. (In the exhibition
+// kiosk launcher the browser is OS-fullscreen, not Fullscreen-API, so printing
+// never leaves fullscreen there — this just covers in-page fullscreen too.)
+$('printBtn').addEventListener('click', ()=>{
+  const wasFS = !!document.fullscreenElement;
+  const reenterFS = ()=>{
+    if (wasFS && !document.fullscreenElement && stage.requestFullscreen){
+      stage.requestFullscreen().catch(()=>{});
+    }
+  };
+  window.addEventListener('afterprint', function once(){
+    window.removeEventListener('afterprint', once);
+    reenterFS();
+  });
+  window.print();
+  // fallback for silent (kiosk) printing, where 'afterprint' may not fire
+  setTimeout(reenterFS, 400);
+});
 
 // ---- email: reveal an input, then hand off to the user's mail client ----
 $('emailBtn').addEventListener('click', ()=>{
