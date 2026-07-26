@@ -234,7 +234,10 @@
       -webkit-print-color-adjust:exact !important;
       print-color-adjust:exact !important;
     }
-    @page{ size:A5 portrait; margin:0; }
+    /* match the printer's loaded paper in portrait; do NOT force A5 (unsupported
+       on some printers -> they rotate). This block is only a fallback; printing
+       normally goes through the isolated iframe in printPostcard(). */
+    @page{ size:portrait; margin:0; }
   }
 </style>
 </head>
@@ -965,7 +968,7 @@ $('closePostcardBtn').addEventListener('click', ()=>{
 // (blank title + zero page margin), and no stray white borders. window.print()
 // on the main page would otherwise drop us out of the Fullscreen API and print
 // the whole document with the page <title> as a header, so we avoid it entirely.
-$('printBtn').addEventListener('click', ()=>{
+function printPostcard(){
   const wasFS = !!document.fullscreenElement;
   const reenterFS = ()=>{
     if (wasFS && !document.fullscreenElement && stage.requestFullscreen){
@@ -1024,7 +1027,19 @@ $('printBtn').addEventListener('click', ()=>{
   } else {
     setTimeout(doPrint, 50);
   }
-});
+}
+$('printBtn').addEventListener('click', printPostcard);
+
+// Route the browser's own print shortcut (Cmd/Ctrl+P) through the SAME clean
+// path, so printing never falls back to the whole-page print (which pulls in the
+// tab title as a header and the landscape on-screen layout, causing rotation).
+window.addEventListener('keydown', (e)=>{
+  const key = (e.key || '').toLowerCase();
+  if ((e.metaKey || e.ctrlKey) && key === 'p'){
+    e.preventDefault();
+    printPostcard();
+  }
+}, true);
 
 // Safety net for ANY print path (the button's iframe already has a blank title,
 // but Cmd+P / kiosk printing of the main page would otherwise put the tab title
