@@ -360,6 +360,39 @@ const sctx = sample.getContext('2d', { willReadFrequently: true });
 // decode-throttling that can be applied to visually-hidden DOM video elements.
 const camFrame = document.createElement('canvas');
 const camFrameCtx = camFrame.getContext('2d', { willReadFrequently: true });
+
+// ---- camera orientation (for a portrait / vertically-mounted screen) ----
+// The webcam is landscape (e.g. 1280x720). On a vertical screen the old code
+// cover-cropped it to fill, which threw away the sides and left a zoomed-in
+// centre strip. Mounting the camera on its side and rotating the feed here
+// aligns the camera's long axis with the tall screen, so a standing person
+// fills the height with almost no crop.
+//   CAM_ROTATE : 0 = none (landscape screen), 90 or 270 for a sideways camera.
+//                If the picture is upside down, switch 90 <-> 270.
+//   CAM_MIRROR : true = selfie mirror (left/right flipped, like a mirror).
+const CAM_ROTATE = 90;   // degrees clockwise
+const CAM_MIRROR = true;
+const oriented = document.createElement('canvas');
+const orientedCtx = oriented.getContext('2d');
+// Rotate + mirror the raw camera frame into `oriented`, returning its size.
+function orientCamFrame(){
+  const vw = camFrame.width, vh = camFrame.height;
+  const rot = ((CAM_ROTATE % 360) + 360) % 360;
+  const swap = (rot === 90 || rot === 270);
+  const ow = swap ? vh : vw, oh = swap ? vw : vh;
+  if (oriented.width !== ow) oriented.width = ow;
+  if (oriented.height !== oh) oriented.height = oh;
+  const g = orientedCtx;
+  g.setTransform(1,0,0,1,0,0);
+  g.clearRect(0,0,ow,oh);
+  g.save();
+  g.translate(ow/2, oh/2);              // work about the output centre
+  if (CAM_MIRROR) g.scale(-1, 1);       // selfie mirror
+  g.rotate(rot * Math.PI/180);          // rotate the feed upright
+  g.drawImage(camFrame, -vw/2, -vh/2);  // draw the raw frame centred
+  g.restore();
+  return { canvas: oriented, w: ow, h: oh };
+}
 let videoEl = null;
 let camStream = null;
 let frameCbId = null;
@@ -572,19 +605,17 @@ function render(){
     for (let i=0;i<cols*rows;i++) smBright[i] = -1;
   }
 
-  // sample the latest camera frame into cols x rows (cover crop of the full canvas area)
+  // Orient the raw camera frame (rotate for a sideways-mounted camera + selfie
+  // mirror), then cover-crop THAT into cols x rows. Because the oriented frame's
+  // long axis now matches the tall grid, the cover-crop trims very little — no
+  // more zoomed-in centre strip.
+  const src = orientCamFrame();
   sample.width = cols; sample.height = rows;
-  const vw = camFrame.width, vh = camFrame.height;
-  const gridAspect = (cols*cell)/(rows*cell); // == cols/rows
+  const vw = src.w, vh = src.h;
+  const gridAspect = cols/rows;
   let sw = vw, sh = vh, sx=0, sy=0;
   if (vw/vh > gridAspect){ sw = vh*gridAspect; sx=(vw-sw)/2; } else { sh = vw/gridAspect; sy=(vh-sh)/2; }
-
-  // mirror horizontally so it behaves like a selfie/mirror
-  sctx.save();
-  sctx.translate(cols, 0);
-  sctx.scale(-1, 1);
-  sctx.drawImage(camFrame, sx, sy, sw, sh, 0, 0, cols, rows);
-  sctx.restore();
+  sctx.drawImage(src.canvas, sx, sy, sw, sh, 0, 0, cols, rows);
   const data = sctx.getImageData(0,0,cols,rows).data;
 
   // raw brightness pass
