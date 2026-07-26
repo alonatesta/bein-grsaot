@@ -988,17 +988,15 @@ function printPostcard(){
 
   const doc = frame.contentDocument || frame.contentWindow.document;
   doc.open();
-  // Blank <title> => no header text. @page{size:portrait} makes the page match
-  // the printer's OWN loaded paper (A4/Letter/A5) in portrait, instead of forcing
-  // A5 — many printers (e.g. HP DeskJet 2600) do NOT support A5 and ROTATE/scale
-  // a forced-A5 page to fit their paper. Matching the paper removes that. The
-  // postcard is A-series aspect, so it fills A4 exactly like A5. margin:0 removes
-  // browser header/footer and printer borders.
+  // Blank <title> => no header text. The printer is set to A5, so send an exact
+  // A5 PORTRAIT page (sized in mm) that matches it 1:1 — the driver has no size
+  // mismatch to reconcile, so no rotation. margin:0 removes browser header/footer
+  // and printer borders; the postcard image fills the whole A5 sheet.
   doc.write(
     '<!doctype html><html><head><title></title><style>'
-    + '@page{size:portrait;margin:0}'
-    + 'html,body{margin:0;padding:0;width:100%;height:100%;background:#fff}'
-    + 'img{display:block;width:100%;height:100%;object-fit:contain;'
+    + '@page{size:148mm 210mm;margin:0}'
+    + 'html,body{margin:0;padding:0;width:148mm;height:210mm;background:#fff}'
+    + 'img{display:block;width:148mm;height:210mm;object-fit:contain;'
     + '-webkit-print-color-adjust:exact;print-color-adjust:exact}'
     + '</style></head><body><img src="' + dataURL + '"></body></html>'
   );
