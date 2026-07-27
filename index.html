@@ -231,7 +231,10 @@
 
   /* "printing…" status swapped in for po-actions while a print job is running */
   .printing-status{
-    display:none;align-items:center;gap:6px;
+    display:none;flex-direction:column;align-items:center;gap:10px;
+  }
+  .printing-text{
+    display:flex;align-items:center;gap:6px;
     font-size:15px;font-weight:800;color:var(--pink);
   }
   .postcard-overlay.printing .po-actions{display:none}
@@ -243,6 +246,26 @@
   @keyframes dot-bounce{
     0%, 60%, 100%{opacity:.25;transform:translateY(0)}
     30%{opacity:1;transform:translateY(-3px)}
+  }
+
+  /* the postcard visually feeding out from the printer's black slot */
+  .printer-anim{position:relative;display:flex;flex-direction:column;align-items:center}
+  .printer-body{
+    width:78px;height:14px;background:var(--ink);border-radius:6px 6px 3px 3px;
+    box-shadow:0 3px 8px rgba(0,0,0,.4);z-index:2;
+  }
+  .printer-card-mask{width:66px;aspect-ratio:148/210;margin-top:-2px}
+  .printer-card-img{
+    width:100%;height:100%;object-fit:cover;display:block;border-radius:0 0 3px 3px;
+    box-shadow:0 4px 10px rgba(0,0,0,.35);
+    clip-path:inset(0 0 100% 0);
+  }
+  .postcard-overlay.printing .printer-card-img{
+    animation:print-emerge 27s ease-out forwards;
+  }
+  @keyframes print-emerge{
+    from{clip-path:inset(0 0 100% 0)}
+    to{clip-path:inset(0 0 0% 0)}
   }
 
   /* "sent!" confirmation popup after a successful email send */
@@ -325,7 +348,11 @@
           <button class="fbtn" id="retakeBtn">צילום מחדש</button>
         </div>
         <div class="printing-status" id="printingStatus">
-          מדפיס<span class="dots"><span>.</span><span>.</span><span>.</span></span>
+          <div class="printing-text">מדפיס<span class="dots"><span>.</span><span>.</span><span>.</span></span></div>
+          <div class="printer-anim">
+            <div class="printer-body"></div>
+            <div class="printer-card-mask"><img id="printerCardImg" class="printer-card-img" alt=""></div>
+          </div>
         </div>
         <div class="po-email" id="emailRow">
           <input type="email" id="emailInput" placeholder="הזינו כתובת מייל" dir="ltr">
@@ -760,22 +787,57 @@ function loop(){
 requestAnimationFrame(loop);
 
 // ---- fullscreen ----
+// The kiosk "fullscreen look" (app.fs — hides the panel, shows only the
+// camera + postcard button) is intentionally decoupled from the raw
+// Fullscreen API state. Printing forces the browser to drop real fullscreen
+// for the print dialog/job; without this, that flashed the side panel back
+// on screen every time. Now the visitor only ever leaves the kiosk look by
+// pressing Escape (or clicking the fullscreen toggle) — any other exit is
+// treated as incidental and the app quietly tries to reclaim fullscreen
+// while staying visually in kiosk mode the whole time.
+let stayFullscreen = false;
+let intentionalExit = false;
+
 function toggleFS(){
   if (!document.fullscreenElement){
     (stage.requestFullscreen ? stage.requestFullscreen() : stage.webkitRequestFullscreen && stage.webkitRequestFullscreen());
   } else {
+    intentionalExit = true;
     document.exitFullscreen && document.exitFullscreen();
   }
 }
+window.addEventListener('keydown', (e)=>{
+  if (e.key === 'Escape' && document.fullscreenElement) intentionalExit = true;
+}, true);
+
 document.addEventListener('fullscreenchange', ()=>{
-  const fs = !!document.fullscreenElement;
-  app.classList.toggle('fs', fs);
-  resize();
-  if (fs){
+  const fsNow = !!document.fullscreenElement;
+
+  if (fsNow){
+    stayFullscreen = true;
+    app.classList.add('fs');
+    resize();
     const hint = $('eschint');
     hint.classList.add('show');
     setTimeout(()=>hint.classList.remove('show'), 3000);
+    return;
   }
+
+  if (stayFullscreen && !intentionalExit){
+    // dropped out of real fullscreen without being asked to — keep looking
+    // fullscreen and quietly try to get it back.
+    setTimeout(()=>{
+      if (stayFullscreen && !document.fullscreenElement && stage.requestFullscreen){
+        stage.requestFullscreen().catch(()=>{});
+      }
+    }, 50);
+    return;
+  }
+
+  intentionalExit = false;
+  stayFullscreen = false;
+  app.classList.remove('fs');
+  resize();
 });
 $('fsBtn').addEventListener('click', toggleFS);
 $('fsBtn2').addEventListener('click', toggleFS);
@@ -1069,6 +1131,7 @@ function printPostcard(){
   };
 
   const dataURL = $('postcardCanvas').toDataURL('image/png');
+  $('printerCardImg').src = dataURL;
 
   // build a throwaway, fully-isolated print frame. Give it a REAL offscreen size
   // (not 1x1) with the A5 portrait aspect so silent/kiosk printing lays it out
