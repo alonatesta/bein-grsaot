@@ -177,6 +177,18 @@
   .app.fs .postcard-btn{display:block}
   .app.fs.capturing .postcard-btn{display:none}
 
+  /* resolution slider — visible only in fullscreen, mirrors the panel's #res */
+  .res-fs{
+    display:none;position:absolute;bottom:84px;inset-inline-start:50%;transform:translateX(50%);
+    z-index:8;align-items:center;gap:10px;white-space:nowrap;
+    background:rgba(0,0,0,.55);color:#fff;font-size:12.5px;font-weight:700;
+    padding:8px 16px;border-radius:999px;
+  }
+  .res-fs input[type=range]{width:140px}
+  .res-fs output{font-variant-numeric:tabular-nums;min-width:24px;text-align:center}
+  .app.fs .res-fs{display:flex}
+  .app.fs.capturing .res-fs{display:none}
+
   /* A5-portrait capture frame overlay */
   .capture-frame{
     display:none;position:absolute;z-index:9;border:2px solid rgba(0,0,0,.85);
@@ -288,6 +300,13 @@
     <!-- A5 postcard capture frame + countdown (shown only during capture in fullscreen) -->
     <div id="captureFrame" class="capture-frame" aria-hidden="true">
       <div class="cf-count" id="cfCount">3</div>
+    </div>
+
+    <!-- resolution slider, fullscreen only — mirrors the panel's #res -->
+    <div class="res-fs" id="resFsWrap">
+      <label for="resFs">רזולוציה</label>
+      <input type="range" id="resFs" min="12" max="220" value="48" step="1">
+      <output id="resFsOut">48</output>
     </div>
 
     <!-- postcard button, fullscreen only -->
@@ -491,6 +510,16 @@ document.getElementById('noneBtn').addEventListener('click', ()=>{ TILES.forEach
 const $ = id => document.getElementById(id);
 const bindRange = (id, outId) => { const el=$(id),o=$(outId); el.addEventListener('input',()=>o.textContent=el.value); };
 bindRange('res','resOut'); bindRange('gap','gapOut');
+
+// mirror the resolution slider into fullscreen so visitors can play with it
+// there too, without leaving fullscreen for the side panel.
+$('resFs').value = $('res').value;
+$('res').addEventListener('input', ()=>{ $('resFs').value = $('res').value; });
+$('resFs').addEventListener('input', ()=>{
+  $('res').value = $('resFs').value;
+  $('resOut').textContent = $('resFs').value;
+  $('resFsOut').textContent = $('resFs').value;
+});
 
 // ---- canvas sizing (device pixels) ----
 function resize(){
